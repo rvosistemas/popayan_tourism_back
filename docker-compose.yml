@@ -1,0 +1,42 @@
+version: '3.9'
+
+networks:
+  TOURISM_RED:
+      driver: bridge
+
+services:
+  postgres:
+    image: postgres:16
+    hostname: ${POSTGRES_HOSTNAME}
+    container_name: ${POSTGRES_HOSTNAME}
+    ports:
+      - "${POSTGRES_DOCKER_PORT}:${POSTGRES_PORT}"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    env_file:
+      - .env
+    volumes:
+      - ./data_postgres:/var/lib/postgresql/data
+    networks:
+      - TOURISM_RED
+
+  django_back_popayan_tourism_admin:
+    build:
+      context: ./${BACK_ADMIN_POPAYAN_TOURISM}
+    hostname: ${BACK_ADMIN_POPAYAN_TOURISM_HOSTNAME}
+    container_name: ${BACK_ADMIN_POPAYAN_TOURISM_HOSTNAME}
+    tty: true
+    ports:
+      - "${BACK_ADMIN_POPAYAN_TOURISM_PORT}:${BACK_ADMIN_POPAYAN_TOURISM_PORT}"
+    networks:
+      - TOURISM_RED
+    depends_on:
+      - postgres
+    environment:
+      PYTHONUNBUFFERED: 1
+    command: python manage.py runserver ${BASE_HOSTNAME}:${BACK_ADMIN_POPAYAN_TOURISM_PORT}
+    volumes:
+      - ./${BACK_ADMIN_POPAYAN_TOURISM}:/${BACK_ADMIN_POPAYAN_TOURISM_APP_NAME}
+
