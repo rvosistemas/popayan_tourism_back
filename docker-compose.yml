@@ -1,4 +1,3 @@
-version: '3.9'
 
 networks:
   TOURISM_RED:
@@ -24,7 +23,8 @@ services:
 
   django_back_popayan_tourism_admin:
     build:
-      context: ./${BACK_ADMIN_POPAYAN_TOURISM}
+#      context: ./${BACK_ADMIN_POPAYAN_TOURISM}
+      context: .
     hostname: ${BACK_ADMIN_POPAYAN_TOURISM_HOSTNAME}
     container_name: ${BACK_ADMIN_POPAYAN_TOURISM_HOSTNAME}
     tty: true
@@ -38,5 +38,6 @@ services:
       PYTHONUNBUFFERED: 1
     command: python manage.py runserver ${BASE_HOSTNAME}:${BACK_ADMIN_POPAYAN_TOURISM_PORT}
     volumes:
-      - ./${BACK_ADMIN_POPAYAN_TOURISM}:/${BACK_ADMIN_POPAYAN_TOURISM_APP_NAME}
+#      - ./${BACK_ADMIN_POPAYAN_TOURISM}:/${BACK_ADMIN_POPAYAN_TOURISM_APP_NAME}
+      - ./:/${BACK_ADMIN_POPAYAN_TOURISM_APP_NAME}
 
