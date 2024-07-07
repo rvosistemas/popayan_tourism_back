@@ -426,4 +426,7 @@ pyrightconfig.json
 .history
 .ionide
 
+# Databases
+data_postgres/*
+
 # End of https://www.toptal.com/developers/gitignore/api/python,django,angular,pycharm,visualstudiocode

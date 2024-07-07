@@ -1,0 +1,22 @@
+
+[run]
+omit =
+    */migrations/*
+    */tests/*
+
+[report]
+exclude_lines =
+    # Have to re-enable the standard pragma
+    pragma: no cover
+
+    # Don't complain about missing debug-only code:
+    def __repr__
+    if self\.debug
+
+    # Don't complain if tests don't hit defensive assertions:
+    raise AssertionError
+    raise NotImplementedError
+    raise RuntimeError
+
+    # Don't complain if code isn't hit during a test run:
+    if __name__ == .__main__.:

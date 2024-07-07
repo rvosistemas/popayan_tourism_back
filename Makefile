@@ -33,12 +33,12 @@ c:
 	@echo "Executing..."
 	export DJANGO_SETTINGS_MODULE=project.settings;\
 	pytest --cov=$(MODULE)/ \
-	tests/$(MODULE)/ --cov-report term-missing -x -s -W \
-	ignore::DeprecationWarning -o cache_dir=/tmp/application/cache
+	tests/test_$(MODULE)/ --cov-config=.coveragerc --cov-report term-missing -x -s -W \
+	ignore::DeprecationWarning --nomigrations -o cache_dir=/tmp/application/cache
 
 a:
 	@echo "Executing..."
 	export DJANGO_SETTINGS_MODULE=project.settings;\
 	pytest --cov=./ \
-	tests/ --cov-report term-missing -x -s -W \
-	ignore::DeprecationWarning
+	tests/ --cov-config=.coveragerc --cov-report term-missing -x -s -W \
+	ignore::DeprecationWarning --nomigrations
