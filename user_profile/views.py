@@ -1,10 +1,10 @@
 # views.py
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.utils.encoding import force_bytes, force_str
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.middleware.csrf import get_token
+from django.shortcuts import render
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
@@ -19,7 +19,7 @@ from .swagger import (
     password_reset_request_swagger_params,
     password_reset_confirm_swagger_params,
 )
-from .auth_utils import handle_login
+from .auth_utils import handle_login, send_password_reset_email, generate_password_reset_token
 from .models import User
 
 
@@ -61,22 +61,25 @@ class PasswordResetRequestView(APIView):
             app_logger.error("User with this email does not exist")
             return Response({'error': 'User with this email does not exist'}, status=status.HTTP_400_BAD_REQUEST)
 
-        token = default_token_generator.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        uid, token = generate_password_reset_token(user)
+        reset_link = f"{request.scheme}://{request.get_host()}/user_profile/reset-password/{uid}/{token}/"
+        send_password_reset_email(user, reset_link)
 
-        reset_link = f"{request.scheme}://{request.get_host()}/reset-password/{uid}/{token}/"
-        mail_subject = 'Password Reset Request'
-        message = render_to_string('reset_password_email.html', {
-            'user': user,
-            'reset_link': reset_link,
-        })
-        send_mail(mail_subject, message, 'dark_rd@hotmail.com', [email])
-        app_logger.info(f"Password reset link sent to {email}")
         return Response({'message': 'Password reset link sent'}, status=status.HTTP_200_OK)
 
 
 class PasswordResetConfirmView(APIView):
     permission_classes = (AllowAny,)
+
+    @handle_exceptions
+    def get(self, request, uidb64, token):
+        app_logger.info("Get password reset link")
+        context = {
+            'uidb64': uidb64,
+            'token': token,
+            'csrf_token': get_token(request)
+        }
+        return render(request, 'password_reset_confirm.html', context)
 
     @handle_exceptions
     @swagger_auto_schema(**password_reset_confirm_swagger_params)

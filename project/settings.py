@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import os
 import environ
 from pathlib import Path
-from django.db.models import UUIDField
 
 env = environ.Env(DEBUG=(bool, False))
 
