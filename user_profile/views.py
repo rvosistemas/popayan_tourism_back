@@ -1,4 +1,5 @@
 import json
+from asgiref.sync import sync_to_async
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse
@@ -35,22 +36,28 @@ class LoginView(View):
 
 
 class RegisterView(View):
-    @handle_exceptions
+    @async_handle_exceptions
     @swagger_auto_schema(**user_registration_swagger_params)
     async def post(self, request) -> JsonResponse:
-        serializer = UserSerializer(data=request.data)
-        if await serializer.is_valid(raise_exception=True):
-            await serializer.save()
+        data = json.loads(request.body.decode('utf-8'))
+        serializer = UserSerializer(data=data)
+
+        is_valid = await sync_to_async(serializer.is_valid)(raise_exception=True)
+        if is_valid:
+            await sync_to_async(serializer.save)()
             app_logger.info("User registered")
             return JsonResponse(serializer.data, status=201)
+        else:
+            return JsonResponse(serializer.errors, status=400)
 
 
 class PasswordResetRequestView(View):
 
-    @handle_exceptions
+    @async_handle_exceptions
     @swagger_auto_schema(**password_reset_request_swagger_params)
     async def post(self, request) -> JsonResponse:
-        email = request.data.get('email')
+        data = json.loads(request.body.decode('utf-8'))
+        email = data.get('email')
         if not email:
             app_logger.error("Email is required")
             return JsonResponse({'error': 'Email is required'}, status=400)
@@ -63,14 +70,14 @@ class PasswordResetRequestView(View):
 
         uid, token = generate_password_reset_token(user)
         reset_link = f"{request.scheme}://{request.get_host()}/user_profile/reset-password/{uid}/{token}/"
-        await send_password_reset_email(user, reset_link)
+        send_password_reset_email(user, reset_link)
 
         return JsonResponse({'message': 'Password reset link sent'}, status=200)
 
 
 class PasswordResetConfirmView(View):
 
-    @handle_exceptions
+    @async_handle_exceptions
     async def get(self, request, uidb64, token):
         app_logger.info("Get password reset link")
         context = {
@@ -78,23 +85,25 @@ class PasswordResetConfirmView(View):
             'token': token,
             'csrf_token': get_token(request)
         }
-        return render(request, 'password_reset_confirm.html', context)
+        return await render(request, 'password_reset_confirm.html', context)
 
-    @handle_exceptions
+    @async_handle_exceptions
     @swagger_auto_schema(**password_reset_confirm_swagger_params)
     async def post(self, request, uidb64, token):
         try:
             uid = force_str(urlsafe_base64_decode(uidb64))
-            user = await User.objects.aget(pk=uid)
-        except (TypeError, ValueError, OverflowError, ObjectDoesNotExist):
+            app_logger.info(f"Decoded uid: {uid}")
+            user = await sync_to_async(User.objects.get)(pk=uid)
+        except (TypeError, ValueError, OverflowError, ObjectDoesNotExist) as e:
             user = None
-            app_logger.error("Invalid user")
+            app_logger.error(f"Invalid user: {e}")
 
         if user is not None and default_token_generator.check_token(user, token):
-            new_password = request.data.get('new_password')
+            data = json.loads(request.body.decode('utf-8'))
+            new_password = data.get('new_password')
             if new_password:
                 user.set_password(new_password)
-                await user.asave()
+                await sync_to_async(user.save)()
                 app_logger.info("Password has been reset")
                 return JsonResponse({'message': 'Password has been reset'}, status=200)
             else:

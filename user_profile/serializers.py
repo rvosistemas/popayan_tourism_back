@@ -26,9 +26,6 @@ class UserSerializer(serializers.ModelSerializer):
             app_logger.error("Age cannot be more than 100 years")
             errors['date_of_birth'] = 'Age cannot be more than 100 years'
 
-        if User.objects.filter(username=username).exists():
-            app_logger.error("Username already exists")
-            errors['username'] = 'Username already exists'
         if User.objects.filter(email=email).exists():
             app_logger.error("Email already exists")
             errors['email'] = 'Email already exists'

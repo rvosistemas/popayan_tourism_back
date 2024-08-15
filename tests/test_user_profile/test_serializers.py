@@ -53,16 +53,16 @@ def test_user_serializer_age_validation(mock_filter):
 
 @patch('user_profile.models.User.objects.filter')
 def test_user_serializer_username_exists(mock_filter, user_data):
-    # Create a mock queryset
-    mock_queryset = MagicMock()
-    mock_queryset.exists.return_value = True
+    mock_filter.return_value.exists.return_value = True
 
-    mock_filter.return_value = mock_queryset
     serializer = UserSerializer(data=user_data)
+
     with pytest.raises(ValidationError) as exc_info:
         serializer.is_valid(raise_exception=True)
+
     assert 'username' in exc_info.value.detail
     assert exc_info.value.detail['username'][0] == 'A user with that username already exists.'
+
 
 
 @patch('user_profile.models.User.objects.filter')

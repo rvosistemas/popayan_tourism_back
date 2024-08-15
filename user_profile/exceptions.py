@@ -32,8 +32,6 @@ def async_handle_exceptions(func):
         try:
             if asyncio.iscoroutinefunction(func):
                 return await func(*args, **kwargs)
-            else:
-                return func(*args, **kwargs)
         except ValidationError as e:
             app_logger.error(f"Validation error: {str(e)}")
             return JsonResponse({'error': str(e.detail)}, status=400)

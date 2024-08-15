@@ -1,105 +1,302 @@
+import uuid
 import pytest
+import json
 from unittest.mock import patch, MagicMock
-
-from asgiref.sync import sync_to_async
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ObjectDoesNotExist
+from django.http import JsonResponse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django.test import RequestFactory
 from rest_framework import status
-from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from rest_framework.test import APIRequestFactory, APIClient
-from rest_framework.exceptions import ValidationError
+from rest_framework.test import APIRequestFactory
+
+from user_profile import views
+from user_profile.models import User
+from utils.logger import app_logger
 
 
 @pytest.fixture
-def api_rf():
-    return APIRequestFactory()
-
-
-@pytest.fixture
-def user_data():
-    return {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'password': 'password123',
-        'date_of_birth': '2000-01-01'
-    }
+def mock_user():
+    user = MagicMock(spec=User)
+    user.pk = uuid.uuid4()
+    user.username = "testuser"
+    user.email = "test@example.com"
+    return user
 
 
 @pytest.mark.asyncio
 async def test_login_view():
-    async def mock_handle_login():
-        return Response({'token': 'test_token'}, status=status.HTTP_200_OK)
+    async def mock_handle_login(username, password, request):
+        return JsonResponse({'token': 'test_token'}, status=status.HTTP_200_OK)
 
     with patch('user_profile.views.handle_login', new=mock_handle_login):
-        client = APIClient()
+        factory = APIRequestFactory()
         url = reverse('login')
         request_data = {'username': 'test', 'password': 'test'}
 
-        response = await sync_to_async(client.post)(url, request_data, format='json')
+        request = factory.post(url, request_data, format='json')
 
+        view = views.LoginView.as_view()
+        response = await view(request)
         assert response.status_code == status.HTTP_200_OK
-        assert response.data == {'token': 'test_token'}
+        assert 'token' in json.loads(response.content)
+        assert json.loads(response.content)['token'] == 'test_token'
 
 
-@patch('user_profile.serializers.UserSerializer.is_valid', return_value=True)
-@patch('user_profile.serializers.UserSerializer.save', return_value=MagicMock())
-@patch('user_profile.serializers.UserSerializer')
-@patch('user_profile.models.User.objects.create_user', return_value=MagicMock())
-@patch('user_profile.models.User.objects.filter')
-def test_register_view(mock_user_filter, mock_user_create, mock_user_serializer_class, mock_save, mock_is_valid, api_rf,
-                       user_data):
-    # Configurar el mock para que retorne un queryset vacío simulando que el usuario no existe
-    mock_user_filter.return_value.exists.return_value = False
+@pytest.mark.asyncio
+async def test_register_view():
+    def mock_is_valid(*args, **kwargs):
+        return True
 
-    mock_serializer_instance = mock_user_serializer_class.return_value
-    mock_serializer_instance.data = user_data
-    mock_serializer_instance.validated_data = user_data  # Ensure validated_data returns the correct values
-    mock_serializer_instance.is_valid.return_value = True  # Ensure is_valid returns True
+    def mock_save(*args, **kwargs):
+        return {'username': 'testuser', 'email': 'test@example.com'}
 
-    # Configurar explícitamente los valores de los campos en el mock del serializador
-    mock_serializer_instance.data['username'] = 'testuser'
-    mock_serializer_instance.data['email'] = 'testuser@example.com'
-    mock_serializer_instance.data['date_of_birth'] = '2000-01-01'
-    mock_serializer_instance.data['password'] = 'password123'
+    with patch('user_profile.serializers.UserSerializer.is_valid', new=mock_is_valid):
+        with patch('user_profile.serializers.UserSerializer.save', new=mock_save):
+            with patch('user_profile.serializers.UserSerializer.data',
+                       new_callable=lambda: {'username': 'testuser', 'email': 'test@example.com'}):
+                factory = APIRequestFactory()
+                url = reverse('register')
+                request_data = {
+                    'username': 'testuser',
+                    'email': 'test@example.com',
+                    'password': 'password123',
+                    'date_of_birth': '2000-01-01'
+                }
 
-    mock_serializer_instance.validated_data = {
-        'username': 'testuser',
-        'email': 'testuser@example.com',
-        'date_of_birth': '2000-01-01',
-        'password': 'password123'
-    }
+                request = factory.post(url, request_data, format='json')
+                view = views.RegisterView.as_view()
+                response = await view(request)
 
-    request = api_rf.post('/api/register/', user_data, format='json')
-    view = RegisterView.as_view()
-    response = view(request)
-
-    expected_result = user_data  # Esperamos los datos del usuario
-
-    assert response.status_code == 201, f"Response data: {response.data}"
-    # assert response.data == expected_result, f"Response data: {response.data}"
-    # mock_user_serializer_class.assert_called_once_with(data=user_data)
-    # mock_is_valid.assert_called_once_with(raise_exception=True)
-    # mock_save.assert_called_once()
-    # mock_user_create.assert_called_once()
-    # mock_user_filter.assert_called()
+                assert response.status_code == 201
+                assert 'username' in json.loads(response.content)
+                assert json.loads(response.content)['username'] == 'testuser'
 
 
-@patch('user_profile.views.authenticate_user', side_effect=ValueError("Invalid credentials"))
-def test_login_view_invalid_credentials(mock_authenticate_user, api_rf):
-    request = api_rf.post('/api/login/', {'username': 'testuser', 'password': 'wrongpassword'}, format='json')
-    view = LoginView.as_view()
-    response = view(request)
+@pytest.mark.asyncio
+async def test_register_view_invalid_data():
+    def mock_is_valid(*args, **kwargs):
+        return False
+
+    def mock_errors(*args, **kwargs):
+        return {'username': ['This field is required.']}
+
+    with patch('user_profile.serializers.UserSerializer.is_valid', new=mock_is_valid):
+        with patch('user_profile.serializers.UserSerializer.errors', new_callable=lambda: mock_errors()):
+            factory = APIRequestFactory()
+            url = reverse('register')
+            request_data = {
+                'email': 'test@example.com',
+                'password': 'password123',
+                'date_of_birth': '2000-01-01'
+                # Missing 'username' field here to simulate invalid data
+            }
+
+            request = factory.post(url, request_data, format='json')
+            view = views.RegisterView.as_view()
+            response = await view(request)
+
+            assert response.status_code == 400
+            assert 'username' in json.loads(response.content)
+            assert json.loads(response.content)['username'] == ['This field is required.']
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_view_success():
+    async def mock_aget(*args, **kwargs):
+        return User(username="testuser", email="test@example.com")
+
+    with patch('user_profile.models.User.objects.aget', new=mock_aget):
+        with patch('user_profile.views.generate_password_reset_token', return_value=('uid', 'token')):
+            with patch('user_profile.views.send_password_reset_email') as mock_send_email:
+                factory = APIRequestFactory()
+                url = reverse('request-reset-password')
+                request_data = {'email': 'test@example.com'}
+
+                request = factory.post(url, request_data, format='json')
+                view = views.PasswordResetRequestView.as_view()
+
+                response = await view(request)
+
+                assert response.status_code == 200
+                assert mock_send_email.called
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_view_no_email():
+    factory = APIRequestFactory()
+    url = reverse('request-reset-password')
+    request_data = {}  # No email provided
+
+    request = factory.post(url, request_data, format='json')
+    view = views.PasswordResetRequestView.as_view()
+    response = await view(request)
 
     assert response.status_code == 400
-    assert response.data == {'error': 'Invalid credentials'}
-    mock_authenticate_user.assert_called_once_with('testuser', 'wrongpassword')
+    assert 'error' in json.loads(response.content)
+    assert json.loads(response.content)['error'] == 'Email is required'
 
 
-@patch('user_profile.serializers.UserSerializer.is_valid', side_effect=ValidationError({'error': 'Invalid data'}))
-def test_register_view_invalid_data(mock_is_valid, api_rf, user_data):
-    request = api_rf.post('/api/register/', user_data, format='json')
-    view = RegisterView.as_view()
-    response = view(request)
+@pytest.mark.asyncio
+async def test_password_reset_request_view_user_not_found():
+    async def mock_aget(*args, **kwargs):
+        raise ObjectDoesNotExist
 
-    assert response.status_code == 400
-    # assert response.data == {'error': 'Invalid data'}
-    # mock_is_valid.assert_called_once_with(raise_exception=True)
+    with patch('user_profile.models.User.objects.aget', new=mock_aget):
+        factory = APIRequestFactory()
+        url = reverse('request-reset-password')
+        request_data = {'email': 'nonexistent@example.com'}
+
+        request = factory.post(url, request_data, format='json')
+        view = views.PasswordResetRequestView.as_view()
+        response = await view(request)
+
+        assert response.status_code == 400
+        assert 'error' in json.loads(response.content)
+        assert json.loads(response.content)['error'] == 'User with this email does not exist'
+
+
+@pytest.mark.asyncio
+async def test_password_reset_confirm_view_get():
+    # Crear un usuario mock más completo
+    mock_user = MagicMock(spec=User)
+    mock_user.pk = 1
+    mock_user.get_email_field_name.return_value = 'email'
+    mock_user.email = 'test@example.com'
+    mock_user.last_login = None
+    mock_user.password = 'password_hash'
+
+    uidb64 = urlsafe_base64_encode(force_bytes(mock_user.pk))
+    token = default_token_generator.make_token(mock_user)
+
+    url = reverse('reset-password-confirm', kwargs={'uidb64': uidb64, 'token': token})
+
+    request = RequestFactory().get(url)
+
+    with patch('user_profile.views.get_token', return_value='mocked_csrf_token'):
+        with patch('user_profile.views.render') as mock_render:
+            mock_render.return_value = MagicMock()
+
+            view = views.PasswordResetConfirmView.as_view()
+            response = await view(request, uidb64=uidb64, token=token)
+
+            mock_render.assert_called_once_with(
+                request,
+                'password_reset_confirm.html',
+                {
+                    'uidb64': uidb64,
+                    'token': token,
+                    'csrf_token': 'mocked_csrf_token'
+                }
+            )
+
+    with patch('user_profile.views.app_logger.info') as mock_logger:
+        await view(request, uidb64=uidb64, token=token)
+        mock_logger.assert_called_once_with("Get password reset link")
+
+
+@pytest.mark.asyncio
+async def test_password_reset_confirm_view_success():
+    user = User(pk=1, username="testuser", email="test@example.com")
+
+    def mock_get(*args, **kwargs):
+        app_logger.info(f"Mock get called with args: {args}, kwargs: {kwargs}")
+        return user
+
+    with patch('user_profile.models.User.objects.get', new=mock_get):
+        with patch('user_profile.views.default_token_generator.check_token', return_value=True):
+            factory = APIRequestFactory()
+            uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+            app_logger.info(f"Generated uidb64: {uidb64}")
+            token = default_token_generator.make_token(user)
+            app_logger.info(f"Generated token: {token}")
+            url = reverse('reset-password-confirm', kwargs={'uidb64': uidb64, 'token': token})
+            request_data = {'new_password': 'new_password123'}
+
+            request = factory.post(url, request_data, format='json')
+            view = views.PasswordResetConfirmView.as_view()
+
+            with patch('user_profile.models.User.save', return_value=None):
+                response = await view(request, uidb64=uidb64, token=token)
+
+            app_logger.info(f"Response status code: {response.status_code}")
+            assert response.status_code == 200
+            assert json.loads(response.content)['message'] == 'Password has been reset'
+
+
+@pytest.mark.asyncio
+async def test_password_reset_confirm_view_invalid_token():
+    mock_user = MagicMock()
+    mock_user.pk = 1
+
+    with patch('user_profile.views.force_str', return_value=str(mock_user.pk)):
+        with patch('user_profile.views.sync_to_async', side_effect=lambda f: f):
+            with patch('user_profile.models.User.objects.get', return_value=mock_user):
+                with patch('user_profile.views.default_token_generator.check_token', return_value=False):
+                    factory = APIRequestFactory()
+                    uidb64 = urlsafe_base64_encode(force_bytes(mock_user.pk))
+                    token = 'invalid-token'
+                    url = reverse('reset-password-confirm', kwargs={'uidb64': uidb64, 'token': token})
+                    request_data = {'new_password': 'new_password123'}
+
+                    request = factory.post(url, json.dumps(request_data), content_type='application/json')
+                    view = views.PasswordResetConfirmView.as_view()
+
+                    response = await view(request, uidb64=uidb64, token=token)
+
+                    assert response.status_code == 400
+                    assert json.loads(response.content)['error'] == 'Invalid token or user'
+
+
+@pytest.mark.asyncio
+async def test_password_reset_confirm_view_user_not_found():
+    async def mock_get(*args, **kwargs):
+        raise ObjectDoesNotExist()
+
+    with patch('user_profile.models.User.objects.get', new=mock_get):
+        with patch('user_profile.views.force_str', return_value='1'):
+            factory = APIRequestFactory()
+            uidb64 = urlsafe_base64_encode(force_bytes(1))
+            token = default_token_generator.make_token(User(username="testuser"))
+            url = reverse('reset-password-confirm', kwargs={'uidb64': uidb64, 'token': token})
+            request_data = {'new_password': 'new_password123'}
+
+            request = factory.post(url, json.dumps(request_data), content_type='application/json')
+            view = views.PasswordResetConfirmView.as_view()
+
+            response = await view(request, uidb64=uidb64, token=token)
+
+            assert response.status_code == 400
+            assert json.loads(response.content)['error'] == 'Invalid token or user'
+
+
+@pytest.mark.asyncio
+async def test_password_reset_confirm_view_no_password():
+    mock_user = MagicMock(spec=User)
+    mock_user.username = "testuser"
+    mock_user.email = "test@example.com"
+    mock_user.pk = 1
+    mock_user.get_email_field_name.return_value = 'email'
+    mock_user.last_login = None
+
+    def mock_get(*args, **kwargs):
+        return mock_user
+
+    with patch('user_profile.models.User.objects.get', new=mock_get):
+        with patch('user_profile.views.default_token_generator.check_token', return_value=True):
+            with patch('user_profile.views.force_str', return_value='1'):
+                factory = APIRequestFactory()
+                uidb64 = urlsafe_base64_encode(force_bytes(1))
+                token = default_token_generator.make_token(mock_user)
+                url = reverse('reset-password-confirm', kwargs={'uidb64': uidb64, 'token': token})
+                request_data = {}  # No password provided
+
+                request = factory.post(url, json.dumps(request_data), content_type='application/json')
+                view = views.PasswordResetConfirmView.as_view()
+
+                response = await view(request, uidb64=uidb64, token=token)
+
+                assert response.status_code == 400
+                assert json.loads(response.content)['error'] == 'Password is required'

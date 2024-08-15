@@ -42,3 +42,13 @@ def test_create_user_profile(user_profile_mock):
     assert str(user_profile_mock) == f"user: {user_profile_mock.user.username}"
     assert isinstance(user_profile_mock.id, uuid.UUID)
     assert user_profile_mock.__str__() == f"user: {user_profile_mock.user.username}"
+
+
+def test_user_profile_str():
+    mock_user = Mock(spec=User)
+    mock_user.username = "testuser"
+
+    profile = UserProfile()
+
+    with patch.object(UserProfile, 'user', mock_user):
+        assert str(profile) == "user: testuser"
