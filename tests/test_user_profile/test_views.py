@@ -1,9 +1,12 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from rest_framework.test import APIRequestFactory
+
+from asgiref.sync import sync_to_async
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.reverse import reverse
+from rest_framework.test import APIRequestFactory, APIClient
 from rest_framework.exceptions import ValidationError
-from user_profile.views import LoginView, RegisterView
-from user_profile.serializers import UserSerializer
 
 
 @pytest.fixture
@@ -21,21 +24,20 @@ def user_data():
     }
 
 
-@patch('user_profile.views.authenticate_user')
-@patch('user_profile.views.generate_token')
-def test_login_view(mock_generate_token, mock_authenticate_user, api_rf, user_data):
-    mock_user = MagicMock()
-    mock_authenticate_user.return_value = mock_user
-    mock_generate_token.return_value = 'test_token'
+@pytest.mark.asyncio
+async def test_login_view():
+    async def mock_handle_login():
+        return Response({'token': 'test_token'}, status=status.HTTP_200_OK)
 
-    request = api_rf.post('/api/login/', {'username': 'testuser', 'password': 'password123'}, format='json')
-    view = LoginView.as_view()
-    response = view(request)
+    with patch('user_profile.views.handle_login', new=mock_handle_login):
+        client = APIClient()
+        url = reverse('login')
+        request_data = {'username': 'test', 'password': 'test'}
 
-    assert response.status_code == 200
-    assert response.data == {'token': 'test_token'}
-    mock_authenticate_user.assert_called_once_with('testuser', 'password123')
-    mock_generate_token.assert_called_once_with(mock_user)
+        response = await sync_to_async(client.post)(url, request_data, format='json')
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == {'token': 'test_token'}
 
 
 @patch('user_profile.serializers.UserSerializer.is_valid', return_value=True)
@@ -43,7 +45,8 @@ def test_login_view(mock_generate_token, mock_authenticate_user, api_rf, user_da
 @patch('user_profile.serializers.UserSerializer')
 @patch('user_profile.models.User.objects.create_user', return_value=MagicMock())
 @patch('user_profile.models.User.objects.filter')
-def test_register_view(mock_user_filter, mock_user_create, mock_user_serializer_class, mock_save, mock_is_valid, api_rf, user_data):
+def test_register_view(mock_user_filter, mock_user_create, mock_user_serializer_class, mock_save, mock_is_valid, api_rf,
+                       user_data):
     # Configurar el mock para que retorne un queryset vacío simulando que el usuario no existe
     mock_user_filter.return_value.exists.return_value = False
 

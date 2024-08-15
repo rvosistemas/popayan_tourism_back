@@ -1,18 +1,16 @@
-# views.py
+import json
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ObjectDoesNotExist
+from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import render
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-from rest_framework.views import APIView
-from rest_framework.response import Response
+from django.views import View
 from drf_yasg.utils import swagger_auto_schema
 from utils.logger import app_logger
 from .serializers import UserSerializer
-from .exceptions import handle_exceptions
+from .exceptions import handle_exceptions, async_handle_exceptions
 from .swagger import (
     user_login_swagger_params,
     user_registration_swagger_params,
@@ -23,56 +21,57 @@ from .auth_utils import handle_login, send_password_reset_email, generate_passwo
 from .models import User
 
 
-class LoginView(APIView):
+class LoginView(View):
 
+    @async_handle_exceptions
     @swagger_auto_schema(**user_login_swagger_params)
-    def post(self, request) -> Response:
-        username = request.data.get('username')
-        password = request.data.get('password')
+    async def post(self, request):
+        data = json.loads(request.body.decode('utf-8'))
+        username = data.get('username')
+        password = data.get('password')
 
-        return handle_login(username, password)
+        response = await handle_login(username, password, request)
+        return response
 
 
-class RegisterView(APIView):
+class RegisterView(View):
     @handle_exceptions
     @swagger_auto_schema(**user_registration_swagger_params)
-    def post(self, request) -> Response:
+    async def post(self, request) -> JsonResponse:
         serializer = UserSerializer(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            serializer.save()
+        if await serializer.is_valid(raise_exception=True):
+            await serializer.save()
             app_logger.info("User registered")
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return JsonResponse(serializer.data, status=201)
 
 
-class PasswordResetRequestView(APIView):
-    permission_classes = (AllowAny,)
+class PasswordResetRequestView(View):
 
     @handle_exceptions
     @swagger_auto_schema(**password_reset_request_swagger_params)
-    def post(self, request):
+    async def post(self, request) -> JsonResponse:
         email = request.data.get('email')
         if not email:
             app_logger.error("Email is required")
-            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({'error': 'Email is required'}, status=400)
 
         try:
-            user = User.objects.get(email=email)
+            user = await User.objects.aget(email=email)
         except ObjectDoesNotExist:
             app_logger.error("User with this email does not exist")
-            return Response({'error': 'User with this email does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({'error': 'User with this email does not exist'}, status=400)
 
         uid, token = generate_password_reset_token(user)
         reset_link = f"{request.scheme}://{request.get_host()}/user_profile/reset-password/{uid}/{token}/"
-        send_password_reset_email(user, reset_link)
+        await send_password_reset_email(user, reset_link)
 
-        return Response({'message': 'Password reset link sent'}, status=status.HTTP_200_OK)
+        return JsonResponse({'message': 'Password reset link sent'}, status=200)
 
 
-class PasswordResetConfirmView(APIView):
-    permission_classes = (AllowAny,)
+class PasswordResetConfirmView(View):
 
     @handle_exceptions
-    def get(self, request, uidb64, token):
+    async def get(self, request, uidb64, token):
         app_logger.info("Get password reset link")
         context = {
             'uidb64': uidb64,
@@ -83,10 +82,10 @@ class PasswordResetConfirmView(APIView):
 
     @handle_exceptions
     @swagger_auto_schema(**password_reset_confirm_swagger_params)
-    def post(self, request, uidb64, token):
+    async def post(self, request, uidb64, token):
         try:
             uid = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
+            user = await User.objects.aget(pk=uid)
         except (TypeError, ValueError, OverflowError, ObjectDoesNotExist):
             user = None
             app_logger.error("Invalid user")
@@ -95,12 +94,12 @@ class PasswordResetConfirmView(APIView):
             new_password = request.data.get('new_password')
             if new_password:
                 user.set_password(new_password)
-                user.save()
+                await user.asave()
                 app_logger.info("Password has been reset")
-                return Response({'message': 'Password has been reset'}, status=status.HTTP_200_OK)
+                return JsonResponse({'message': 'Password has been reset'}, status=200)
             else:
                 app_logger.error("Password is required")
-                return Response({'error': 'Password is required'}, status=status.HTTP_400_BAD_REQUEST)
+                return JsonResponse({'error': 'Password is required'}, status=400)
         else:
             app_logger.error("Invalid token or user")
-            return Response({'error': 'Invalid token or user'}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({'error': 'Invalid token or user'}, status=400)

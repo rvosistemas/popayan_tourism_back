@@ -1,19 +1,20 @@
 import os
+from django.middleware.csrf import get_token
+from asgiref.sync import sync_to_async
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
+from django.http import JsonResponse
 from django.utils.encoding import force_bytes
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.http import urlsafe_base64_encode
 from rest_framework_jwt.settings import api_settings
-from rest_framework.response import Response
 from utils.logger import app_logger
 from .models import User
 
 
-def authenticate_user(username, password) -> User:
-    user = authenticate(username=username, password=password)
-    app_logger.info("User authenticated")
+async def authenticate_user(username, password) -> User:
+    user = await sync_to_async(authenticate)(username=username, password=password)
     if user is not None:
         return user
     else:
@@ -21,24 +22,25 @@ def authenticate_user(username, password) -> User:
         raise ValueError("Invalid credentials")
 
 
-def generate_token(user) -> str:
+async def generate_token(user) -> str:
     jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
     jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
-    payload = jwt_payload_handler(user)
-    token = jwt_encode_handler(payload)
+    payload = await sync_to_async(jwt_payload_handler)(user)
+    token = await sync_to_async(jwt_encode_handler)(payload)
     app_logger.info("token generated")
     return token
 
 
-def handle_login(username, password) -> Response:
+async def handle_login(username, password, request) -> JsonResponse:
     if not username or not password:
         app_logger.error("Username and password are required")
         raise ValueError("Username and password are required")
 
-    user = authenticate_user(username, password)
-    token = generate_token(user)
+    user = await authenticate_user(username, password)
+    token = await generate_token(user)
+    csrf_token = get_token(request)
     app_logger.info("User logged in")
-    return Response({'token': token})
+    return JsonResponse({'token': token, 'csrf_token': csrf_token}, status=200)
 
 
 def generate_password_reset_token(user):
