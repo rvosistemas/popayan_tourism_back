@@ -46,25 +46,22 @@ async def test_generate_token(mock_jwt_payload, mock_jwt_encode):
 @pytest.mark.asyncio
 @patch('user_profile.auth_utils.authenticate_user', return_value=MagicMock(spec=User))
 @patch('user_profile.auth_utils.generate_token', return_value='testtoken')
-@patch('user_profile.auth_utils.get_token', return_value='csrftoken')
-async def test_handle_login(mock_authenticate_user, mock_generate_token, mock_get_token):
-    request = MagicMock()
-    response = await handle_login('testuser', 'testpassword', request)
+async def test_handle_login(mock_authenticate_user, mock_generate_token):
+    response = await handle_login('testuser', 'testpassword')
 
     assert isinstance(response, JsonResponse)
     assert response.status_code == 200
 
     response_data = json.loads(response.content)
 
-    assert response_data == {'token': 'testtoken', 'csrf_token': 'csrftoken'}
+    assert response_data == {'token': 'testtoken'}
 
 
 @pytest.mark.asyncio
 @patch('user_profile.auth_utils.app_logger.error')
 async def test_handle_login_no_username(mock_logger):
-    request = MagicMock()
     with pytest.raises(ValueError, match="Username and password are required"):
-        await handle_login('', 'testpassword', request)
+        await handle_login('', 'testpassword')
 
     mock_logger.assert_called_once_with("Username and password are required")
 
@@ -72,9 +69,8 @@ async def test_handle_login_no_username(mock_logger):
 @pytest.mark.asyncio
 @patch('user_profile.auth_utils.app_logger.error')
 async def test_handle_login_no_password(mock_logger):
-    request = MagicMock()
     with pytest.raises(ValueError, match="Username and password are required"):
-        await handle_login('testuser', '', request)
+        await handle_login('testuser', '')
 
     mock_logger.assert_called_once_with("Username and password are required")
 

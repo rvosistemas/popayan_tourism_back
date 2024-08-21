@@ -11,7 +11,7 @@ from django.views import View
 from drf_yasg.utils import swagger_auto_schema
 from utils.logger import app_logger
 from .serializers import UserSerializer
-from .exceptions import handle_exceptions, async_handle_exceptions
+from .exceptions import async_handle_exceptions
 from .swagger import (
     user_login_swagger_params,
     user_registration_swagger_params,
@@ -31,7 +31,7 @@ class LoginView(View):
         username = data.get('username')
         password = data.get('password')
 
-        response = await handle_login(username, password, request)
+        response = await handle_login(username, password)
         return response
 
 

@@ -1,5 +1,4 @@
 import os
-from django.middleware.csrf import get_token
 from asgiref.sync import sync_to_async
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
@@ -31,16 +30,15 @@ async def generate_token(user) -> str:
     return token
 
 
-async def handle_login(username, password, request) -> JsonResponse:
+async def handle_login(username, password) -> JsonResponse:
     if not username or not password:
         app_logger.error("Username and password are required")
         raise ValueError("Username and password are required")
 
     user = await authenticate_user(username, password)
     token = await generate_token(user)
-    csrf_token = get_token(request)
     app_logger.info("User logged in")
-    return JsonResponse({'token': token, 'csrf_token': csrf_token}, status=200)
+    return JsonResponse({'token': token}, status=200)
 
 
 def generate_password_reset_token(user):

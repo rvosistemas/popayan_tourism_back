@@ -28,7 +28,7 @@ def mock_user():
 
 @pytest.mark.asyncio
 async def test_login_view():
-    async def mock_handle_login(username, password, request):
+    async def mock_handle_login(username, password):
         return JsonResponse({'token': 'test_token'}, status=status.HTTP_200_OK)
 
     with patch('user_profile.views.handle_login', new=mock_handle_login):
