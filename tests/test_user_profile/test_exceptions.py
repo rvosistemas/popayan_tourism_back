@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
-from user_profile.exceptions import handle_exceptions, async_handle_exceptions
+from utils.exceptions import handle_exceptions, async_handle_exceptions
 
 
 def test_handle_exceptions_with_validation_error():

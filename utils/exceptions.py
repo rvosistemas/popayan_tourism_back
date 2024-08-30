@@ -1,6 +1,7 @@
 import asyncio
 from functools import wraps
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -37,6 +38,9 @@ def async_handle_exceptions(func):
             return JsonResponse({'error': str(e.detail)}, status=400)
         except ValueError as e:
             app_logger.error(f"Value error: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+        except TypeError as e:
+            app_logger.error(f"Type error: {str(e)}")
             return JsonResponse({'error': str(e)}, status=400)
         except Exception as e:
             app_logger.error(f"General Exception: {str(e)}")

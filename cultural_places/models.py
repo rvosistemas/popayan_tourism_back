@@ -4,6 +4,7 @@ from django.db import models
 from django.conf import settings
 
 from utils.models import Entity
+from .validators import validate_opening_hours
 
 
 class CulturalPlace(Entity):
@@ -11,7 +12,7 @@ class CulturalPlace(Entity):
     name = models.CharField(max_length=100)
     description = models.TextField()
     address = models.CharField(max_length=255)
-    opening_hours = models.DateTimeField(max_length=100)
+    opening_hours = models.JSONField(validators=[validate_opening_hours])
     image = models.ImageField(upload_to="cultural_places", blank=True, null=True)
 
     def __str__(self):
@@ -25,7 +26,10 @@ class CulturalPlace(Entity):
 
 
 class UserPlacePreference(Entity):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="%(app_label)s_%(class)s_user")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="%(app_label)s_%(class)s_user"
+    )
     place = models.ForeignKey(CulturalPlace, on_delete=models.CASCADE, related_name="%(app_label)s_%(class)s_place")
     rating = models.IntegerField(default=0)
 

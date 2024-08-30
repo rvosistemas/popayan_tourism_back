@@ -21,6 +21,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('user_profile/', include('user_profile.urls')),
     # path('leisure_activities/', include('leisure_activities.urls')),
-    # path('cultural_places/', include('cultural_places.urls')),
+    path('cultural_places/', include('cultural_places.urls')),
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
 ]

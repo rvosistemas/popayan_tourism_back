@@ -11,7 +11,7 @@ from django.views import View
 from drf_yasg.utils import swagger_auto_schema
 from utils.logger import app_logger
 from .serializers import UserSerializer
-from .exceptions import async_handle_exceptions
+from utils.exceptions import async_handle_exceptions
 from .swagger import (
     user_login_swagger_params,
     user_registration_swagger_params,
