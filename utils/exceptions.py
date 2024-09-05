@@ -1,4 +1,3 @@
-import asyncio
 from functools import wraps
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -31,8 +30,7 @@ def async_handle_exceptions(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
         try:
-            if asyncio.iscoroutinefunction(func):
-                return await func(*args, **kwargs)
+            return await func(*args, **kwargs)
         except ValidationError as e:
             app_logger.error(f"Validation error: {str(e)}")
             return JsonResponse({'error': str(e.detail)}, status=400)
@@ -41,6 +39,12 @@ def async_handle_exceptions(func):
             return JsonResponse({'error': str(e)}, status=400)
         except TypeError as e:
             app_logger.error(f"Type error: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+        except ObjectDoesNotExist as e:
+            app_logger.error(f"Object does not exist: {str(e)}")
+            return JsonResponse({'error': str(e)}, status=400)
+        except OverflowError as e:
+            app_logger.error(f"Overflow error: {str(e)}")
             return JsonResponse({'error': str(e)}, status=400)
         except Exception as e:
             app_logger.error(f"General Exception: {str(e)}")

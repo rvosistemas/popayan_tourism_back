@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'rest_framework',
     'drf_yasg',
     'rest_framework_jwt',
@@ -161,12 +162,14 @@ OAUTH2_PROVIDER = {
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'django.contrib.auth.backends.ModelBackend',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
+
+ASGI_APPLICATION = 'project.asgi.application'
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/

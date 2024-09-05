@@ -4,7 +4,7 @@ from colorlog import ColoredFormatter
 
 
 def configure_logger() -> logging.Logger:
-    logger = logging.getLogger("my_flask_app")
+    logger = logging.getLogger("popayan_tourism_backend_app")
     logger.setLevel(logging.DEBUG)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)

@@ -9,7 +9,7 @@ from .validators import validate_opening_hours
 
 class CulturalPlace(Entity):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     description = models.TextField()
     address = models.CharField(max_length=255)
     opening_hours = models.JSONField(validators=[validate_opening_hours])

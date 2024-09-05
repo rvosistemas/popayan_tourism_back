@@ -40,7 +40,18 @@ user_login_swagger_params = {
 
 user_registration_swagger_params = {
     'operation_description': "User registration",
-    'request_body': UserSerializer,
+    'request_body': openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['username', 'email', 'password', 'date_of_birth'],
+        properties={
+            'username': openapi.Schema(type=openapi.TYPE_STRING, description='Username'),
+            'email': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_EMAIL, description='User email'),
+            'password': openapi.Schema(type=openapi.TYPE_STRING, format='password', description='User password'),
+            'date_of_birth': openapi.Schema(
+                type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE,
+                description='Date of birth in format YYYY-MM-DD')
+        }
+    ),
     'responses': {
         201: UserSerializer,
         400: 'Bad Request'

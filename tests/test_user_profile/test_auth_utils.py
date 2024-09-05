@@ -60,19 +60,19 @@ async def test_handle_login(mock_authenticate_user, mock_generate_token):
 @pytest.mark.asyncio
 @patch('user_profile.auth_utils.app_logger.error')
 async def test_handle_login_no_username(mock_logger):
-    with pytest.raises(ValueError, match="Username and password are required"):
+    with pytest.raises(ValueError, match="Username and password must be non-empty strings"):
         await handle_login('', 'testpassword')
 
-    mock_logger.assert_called_once_with("Username and password are required")
+    mock_logger.assert_called_once_with("Username and password must be non-empty strings")
 
 
 @pytest.mark.asyncio
 @patch('user_profile.auth_utils.app_logger.error')
 async def test_handle_login_no_password(mock_logger):
-    with pytest.raises(ValueError, match="Username and password are required"):
+    with pytest.raises(ValueError, match="Username and password must be non-empty strings"):
         await handle_login('testuser', '')
 
-    mock_logger.assert_called_once_with("Username and password are required")
+    mock_logger.assert_called_once_with("Username and password must be non-empty strings")
 
 
 @patch('user_profile.auth_utils.default_token_generator.make_token', return_value='testtoken')

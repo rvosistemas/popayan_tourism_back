@@ -1,4 +1,5 @@
 import os
+
 from asgiref.sync import sync_to_async
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
@@ -31,9 +32,9 @@ async def generate_token(user) -> str:
 
 
 async def handle_login(username, password) -> JsonResponse:
-    if not username or not password:
-        app_logger.error("Username and password are required")
-        raise ValueError("Username and password are required")
+    if not all(isinstance(var, str) and var for var in [username, password]):
+        app_logger.error("Username and password must be non-empty strings")
+        raise ValueError("Username and password must be non-empty strings")
 
     user = await authenticate_user(username, password)
     token = await generate_token(user)
