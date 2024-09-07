@@ -2,9 +2,7 @@ import json
 import os
 import httpx
 
-import jwt
-from django.conf import settings
-from django.contrib.auth.tokens import default_token_generator
+
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.handlers.asgi import ASGIHandler
 from django.test import RequestFactory
@@ -16,7 +14,7 @@ from httpx import AsyncClient
 from ninja.testing import TestClient
 from rest_framework.exceptions import ValidationError
 
-from user_profile.api import api, JWTAuth, password_reset_confirm_get, password_reset_confirm_post
+from user_profile.api import api, password_reset_confirm_get, password_reset_confirm_post
 from unittest.mock import patch, MagicMock, AsyncMock
 import pytest
 from user_profile.models import User
@@ -26,61 +24,7 @@ os.environ['NINJA_SKIP_REGISTRY'] = '1'
 client = TestClient(api)
 
 
-@pytest.mark.asyncio
-async def test_jwt_authenticate_success():
-    token = jwt.encode({"user_id": 1}, settings.SECRET_KEY, algorithm="HS256")
-    user_mock = MagicMock()
 
-    with patch('user_profile.models.User.objects.get', return_value=user_mock) as mock_get:
-        auth = JWTAuth()
-        user = auth.authenticate(request=None, token=token)
-
-        mock_get.assert_called_once_with(id=1)
-        assert user == user_mock
-
-
-@pytest.mark.asyncio
-async def test_jwt_authenticate_expired_token():
-    expired_token = jwt.encode({"user_id": 1}, settings.SECRET_KEY, algorithm="HS256")
-
-    with patch('user_profile.api.jwt.decode', side_effect=jwt.ExpiredSignatureError):
-        auth = JWTAuth()
-        user = auth.authenticate(request=None, token=expired_token)
-
-        assert user is None
-
-
-@pytest.mark.asyncio
-async def test_jwt_authenticate_invalid_token():
-    invalid_token = "invalid.token"
-
-    with patch('user_profile.api.jwt.decode', side_effect=jwt.InvalidTokenError):
-        auth = JWTAuth()
-        user = auth.authenticate(request=None, token=invalid_token)
-
-        assert user is None
-
-
-@pytest.mark.asyncio
-async def test_jwt_authenticate_user_not_found():
-    token = jwt.encode({"user_id": 999}, settings.SECRET_KEY, algorithm="HS256")
-
-    with patch('user_profile.models.User.objects.get', side_effect=User.DoesNotExist):
-        auth = JWTAuth()
-        user = auth.authenticate(request=None, token=token)
-
-        assert user is None
-
-
-@pytest.mark.asyncio
-async def test_jwt_authenticate_general_exception():
-    token = jwt.encode({"user_id": 1}, settings.SECRET_KEY, algorithm="HS256")
-
-    with patch('user_profile.models.User.objects.get', side_effect=Exception("Unexpected error")):
-        auth = JWTAuth()
-        user = auth.authenticate(request=None, token=token)
-
-        assert user is None
 
 
 @pytest.mark.asyncio

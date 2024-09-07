@@ -1,10 +1,8 @@
 # user_profile/api.py
 import json
-import jwt
 
 from django.http import JsonResponse
 from ninja import NinjaAPI
-from ninja.security import HttpBearer
 from .models import User
 from .auth_utils import (
     handle_login,
@@ -19,7 +17,6 @@ from django.middleware.csrf import get_token
 from django.shortcuts import render
 from django.contrib.auth.tokens import default_token_generator
 from asgiref.sync import sync_to_async
-from django.conf import settings
 
 from .pydantic_serializers import UserLoginSchema, UserRegisterSchema, PasswordResetSuccessSchema, \
     PasswordResetErrorSchema, PasswordResetRequestSchema, PasswordResetSchema
@@ -31,29 +28,6 @@ api = NinjaAPI(
     description="API for managing user profiles",
     urls_namespace='user_profile_api'
 )
-
-
-class JWTAuth(HttpBearer):
-    def authenticate(self, request, token):
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user_id = payload.get("user_id")
-
-            user = User.objects.get(id=user_id)
-
-            return user
-        except jwt.ExpiredSignatureError:
-            app_logger.error("Expired token")
-            return None
-        except jwt.InvalidTokenError:
-            app_logger.error("Invalid token")
-            return None
-        except User.DoesNotExist:
-            app_logger.error("User does not exist")
-            return None
-        except Exception as e:
-            app_logger.error(f"Authentication error: {str(e)}")
-            return None
 
 
 @api.post("/login", response={200: UserLoginSchema, 400: dict})

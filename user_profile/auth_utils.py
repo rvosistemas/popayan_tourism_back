@@ -1,5 +1,7 @@
 import os
+from datetime import datetime, timedelta, timezone
 
+import jwt
 from asgiref.sync import sync_to_async
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
@@ -8,7 +10,8 @@ from django.utils.encoding import force_bytes
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.http import urlsafe_base64_encode
-from rest_framework_jwt.settings import api_settings
+
+from project import settings
 from utils.logger import app_logger
 from .models import User
 
@@ -23,12 +26,15 @@ async def authenticate_user(username, password) -> User:
 
 
 async def generate_token(user) -> str:
-    jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
-    jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
-    payload = await sync_to_async(jwt_payload_handler)(user)
-    token = await sync_to_async(jwt_encode_handler)(payload)
-    app_logger.info("token generated")
-    return token
+    payload = {
+        'user_id': str(user.id),
+        'exp': datetime.now(timezone.utc) + timedelta(days=1),
+        'iat': datetime.now(timezone.utc),
+    }
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+    token_str = token.decode('utf-8') if isinstance(token, bytes) else token
+    app_logger.info("Generated token")
+    return token_str
 
 
 async def handle_login(username, password) -> JsonResponse:

@@ -1,10 +1,12 @@
 import pytest
 import json
+
+from django.core.paginator import PageNotAnInteger, EmptyPage
 from django.http import JsonResponse
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
-from utils.exceptions import handle_exceptions, async_handle_exceptions
+from utils.exceptions import handle_exceptions, async_handle_exceptions, retry_with_page_one
 
 
 def test_handle_exceptions_with_validation_error():
@@ -107,3 +109,61 @@ async def test_async_handle_exceptions_no_exception():
     response = await func_no_exception()
 
     assert response == 'success'
+
+
+@pytest.mark.asyncio
+async def test_async_handle_exceptions_with_page_not_an_integer():
+    @async_handle_exceptions
+    async def func_raises_page_not_an_integer():
+        raise PageNotAnInteger('Page is not an integer')
+
+    response = await func_raises_page_not_an_integer()
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 400
+    assert json.loads(response.content) == {'error': 'Function does not support page argument'}
+
+
+@pytest.mark.asyncio
+async def test_async_handle_exceptions_with_empty_page():
+    @async_handle_exceptions
+    async def func_raises_empty_page():
+        raise EmptyPage('This page is empty')
+
+    response = await func_raises_empty_page()
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 200
+    response_data = json.loads(response.content)
+    assert response_data == {
+        'items': [],
+        'total': 0,
+        'num_pages': 0,
+        'current_page': 1
+    }
+
+
+@pytest.mark.asyncio
+async def test_retry_with_page_one():
+    async def func_page_one(page=None):
+        assert page == 1
+        return JsonResponse({'success': 'Page set to 1'}, status=200)
+
+    response = await retry_with_page_one(func_page_one)
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 200
+    response_data = json.loads(response.content)
+    assert response_data == {'success': 'Page set to 1'}
+
+
+@pytest.mark.asyncio
+async def test_async_handle_exceptions_with_general_exception_during_pagination():
+    @async_handle_exceptions
+    async def func_raises_general_exception(*args, **kwargs):
+        raise Exception
+
+    response = await retry_with_page_one(func_raises_general_exception)
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 500
+    assert json.loads(response.content) == {'error': ''}

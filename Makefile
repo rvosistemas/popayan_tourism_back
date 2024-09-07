@@ -28,8 +28,9 @@
 
 
 MODULE = user_profile
+#MODULE = cultural_places
 
-c:
+m:
 	@echo "Executing..."
 	export DJANGO_SETTINGS_MODULE=project.settings;\
 	pytest --cov=$(MODULE)/ \

@@ -1,10 +1,13 @@
 import pytest
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 from django.http import JsonResponse
 from django.contrib.auth.models import User
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+
+from project import settings
 from user_profile.auth_utils import (
     authenticate_user,
     generate_token,
@@ -34,11 +37,29 @@ async def test_authenticate_user_invalid_credentials(mock_logger, mock_authentic
 
 
 @pytest.mark.asyncio
-@patch('user_profile.auth_utils.api_settings.JWT_PAYLOAD_HANDLER', return_value={'user_id': 1})
-@patch('user_profile.auth_utils.api_settings.JWT_ENCODE_HANDLER', return_value='testtoken')
-async def test_generate_token(mock_jwt_payload, mock_jwt_encode):
+@patch('user_profile.auth_utils.jwt.encode')
+@patch('user_profile.auth_utils.datetime')
+async def test_generate_token(mock_datetime, mock_jwt_encode):
+    mock_now = datetime(2024, 9, 5, 18, 59, 0, 31040, tzinfo=timezone.utc)
+    mock_datetime.now.return_value = mock_now
+    mock_datetime.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+
+    mock_jwt_encode.return_value = 'testtoken'
+
     user = MagicMock(spec=User)
+    user.id = 1
+
     token = await generate_token(user)
+
+    mock_jwt_encode.assert_called_once_with(
+        {
+            'user_id': str(user.id),
+            'exp': mock_now + timedelta(days=1),
+            'iat': mock_now,
+        },
+        settings.SECRET_KEY,
+        algorithm='HS256'
+    )
 
     assert token == 'testtoken'
 
@@ -77,6 +98,7 @@ async def test_handle_login_no_password(mock_logger):
 
 @patch('user_profile.auth_utils.default_token_generator.make_token', return_value='testtoken')
 def test_generate_password_reset_token(mock_make_token):
+    user = MagicMock(spec=User)
     user = MagicMock(spec=User)
     uid, token = generate_password_reset_token(user)
     assert uid == urlsafe_base64_encode(force_bytes(user.pk))
